@@ -1,0 +1,144 @@
+clc
+close all
+clear all
+cd('C:\Users\fi95063\Desktop')
+
+data = readtable('stock_price.xls');
+
+data(1:10,:)
+
+t = datetime(data.year,data.month,data.day);
+sp = data.sp;
+T = length(t);
+
+table(t(1:10),data.sp(1:10))
+
+figure(1)
+plot(t,sp*100)
+hold on
+plot(t(582),sp(582)*100,'o','MarkerSize',5,'LineWidth',2)
+hold off
+title('raw series')
+xlabel('year')
+ylabel('price index')
+set(gca,'FontSize',15)
+
+%% DATA TRANSFORMATIONS
+
+l_sp = log(sp*100); %sp*100 is the price index
+
+plot(t,l_sp)
+title('log-transformed')
+xlabel('year')
+ylabel('log price index')
+set(gca,'FontSize',15)
+
+d_sp = diff(l_sp)*100; %diff gives first-difference, hence growth rate, x100 gives percentages.
+
+figure(1)
+plot(t(2:end),d_sp)
+title('difference series')
+xlabel('year')
+ylabel('%')
+set(gca,'FontSize',15)
+
+%% LINEAR REGRESSION 
+
+trend = 1 : T; %generate a linear time trend
+X = [ones([length(l_sp),1]),trend(:)]; %covariates
+Y = l_sp; %dependent var
+B = X\Y; %MATLAB shortcut to solve A*X = B: the same as OLS solution (X'X)^-1 X'Y
+
+B
+
+
+%look at trend
+plot(t,l_sp)
+title('log-transformed')
+xlabel('year')
+ylabel('log price index')
+set(gca,'FontSize',15)
+hold on
+plot(t,B(1) + B(2)*trend)
+hold off
+
+%detrend series
+c_sp = Y - X*B; 
+
+plot(t,c_sp)
+title('determinist trend deviation')
+xlabel('year')
+ylabel('%')
+set(gca,'FontSize',15)
+
+plot(t(2:end),d_sp)
+title('difference series')
+xlabel('year')
+ylabel('%')
+set(gca,'FontSize',15)
+
+% Notes: 1) d_sp corresponds to the growth rate of the stock price index, or stock return
+
+%        2) c_sp is the percentage deviation of the stock price index relative to the linear deterministic trend
+
+%        3) X\Y computes the OLS: hat beta = (X'X)^{-1} (X'Y)
+
+%% AUTOCORRELATIONS
+
+acf1 = autocorr(d_sp, 'NumLags', 18);
+acf2 = autocorr(c_sp, 'NumLags', 18);
+
+%% LJUNG-BOX TEST (ECONOMETRICS TOOLBOX)
+
+[h1,pValue1,stat1] = lbqtest(d_sp,'lags',1:18)
+[h2,pValue2,stat2] = lbqtest(c_sp,'lags',1:18)
+
+% h = 1 indicates rejection of the no residual autocorrelation null hypothesis in favor of the alternative.
+% h = 0 indicates failure to reject the no residual autocorrelation null hypothesis.
+
+% Notes: 1) The Ljung-Box statistics indicate that d_sp and c_sp are not white noise.
+
+%        2) The autocorrelations suggest that d_sp is stationary (short
+%        memory), but that c_sp is not stationary (long memory)
+
+%           For this reason, we use d_sp
+
+%% LJUNG-BOX TEST (IMPLEMENTED FUNCTION)
+
+T = length(t);
+n = 18;
+Q1 = zeros(1,18);
+Chi1 = zeros(1,18);
+Q2 = zeros(1,18);
+Chi2 = zeros(1,18);
+
+for i = 1:18
+    [Q1(i) Chi1(i)]  = Lbox(acf1, T-1, i);
+    [Q2(i) Chi2(i)]  = Lbox(acf2, T, i);
+end
+
+% Q is the stat, Chi is the 5% threshold
+
+table(Q1',Chi2',Q2',Chi1')
+
+%% GRAPH OF THE DATA
+
+figure(2)
+subplot(2,2,1)
+plot(t,c_sp)
+title('Hypothesis: determinist trend') 
+set(gca,'FontSize',15)
+subplot(2,2,2)
+autocorr(c_sp, 'NumLags', 18)
+title('autocorrelations: c_sp')
+set(gca,'FontSize',15)
+dt = t(1:T-1);
+
+subplot(2,2,3)
+plot(dt,d_sp)
+title('Hypothesis: stochastic trend') 
+set(gca,'FontSize',15)
+subplot(2,2,4)
+autocorr(c_sp, 'NumLags', 18)
+title('autocorrelations: d_sp')
+set(gca,'FontSize',15)
