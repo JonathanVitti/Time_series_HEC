@@ -1,0 +1,172 @@
+Partie 1. Analyse préliminaire (25 points)
+
+Définissons la série   pour le reste de ce travail, où   est l'indice réel des prix d'habitations au Canada.
+1.a) Chargez les données et ne gardez que les observations jusqu'à décembre 2019. Tracez la série brute  avec des étiquettes sur chaque axe et un titre  'log(HP_t)'. La dimension temporelle doit apparaître sur l'axe des abscisses. Qu est-ce que log(HP_t) - log(HP_{t-1}) measurable sur l'axis vertical represent?
+clc
+close all
+clear all
+
+%cd('C:\Users\fi95063\Desktop')
+
+data = readtable('QCAR628BIS.csv');
+
+data(1:10,:)
+
+
+
+class(data.DATE)
+
+% Lire les données depuis le fichier Excel
+data = readtable('QCAR628BIS.csv');
+
+% Filtrer les données pour garder uniquement celles jusqu'à décembre 2019
+data_filtered = data(data.DATE <= datetime(2019,12,31), :);
+
+% Afficher les premières lignes pour vérification
+head(data_filtered)
+
+
+any(data_filtered.DATE >= datetime(2020,1,1))
+
+t = data_filtered.DATE;            % Colonne des dates filtrées
+HP_t = data_filtered.QCAR628BIS;   % Colonne des valeurs filtrées
+T = length(t);
+table(t(1:10),HP_t(1:10))
+
+% 1a) Graphique du log(Hpt)
+figure(1)
+plot(t,HP_t)
+hold on
+plot(t(199),HP_t(199),'o','MarkerSize',5,'LineWidth',2)
+hold off
+title('log(HP_t)')
+xlabel('année')
+ylabel('HP_t')
+set(gca,'FontSize',15)
+
+
+Interprétation :
+
+
+1.b) Supposons qu'il existe une tendance temporelle déterministe linéaire : . Appliquez la transformation requise pour stationnariser la série    et tracez la série résultante.
+%% DATA TRANSFORMATIONS
+l_HP_t = log(HP_t*100)
+plot(t,l_HP_t)
+title('log-transformed')
+xlabel('year')
+ylabel('log price index')
+set(gca,'FontSize',15)
+
+
+%% LINEAR REGRESSION 
+
+trend = 1 : T; %generate a linear time trend
+X = [ones([length(l_HP_t),1]),trend(:)]; %covariates
+Y = l_HP_t; %dependent var
+B = X\Y; %MATLAB shortcut to solve A*X = B: the same as OLS solution (X'X)^-1 X'Y
+
+B
+
+
+%look at trend
+plot(t,l_HP_t)
+title('log-transformed')
+xlabel('year')
+ylabel('log price index')
+set(gca,'FontSize',15)
+hold on
+plot(t,B(1) + B(2)*trend)
+hold off
+Interprétation :
+
+
+1.c) Supposons qu'il existe une tendance temporelle stochastique, c'est-à-dire une marche aléatoire. Appliquez la transformation requise pour stationnariser    et tracez la série résultante.
+d_HP = diff(l_HP_t)*100; %diff gives first-difference, hence growth rate, x100 gives percentages.
+
+figure(1)
+plot(t(2:end),d_HP)
+title('difference series')
+xlabel('year')
+ylabel('%')
+set(gca,'FontSize',15)
+Interprétation :
+
+
+1.d) Analysez les fonctions d'autocorrélation de l'échantillon pour évaluer si les séries sont stationnaires. Quelle série choisiriez-vous pour estimer un modèle de série chronologique ?
+
+Interprétation :
+
+1.e) À partir de maintenant, utilisez exclusivement la série qui est stationnaire. On va appeler la série stationnaire . Effectuez les tests de Ljung-Box avec 1 à 18 lags pour vérifier si la série est un bruit blanc et concluez.
+
+Interprétation :
+
+
+
+Partie 2. Choix du modèle (45 points)
+
+À partir d'ici, on va appeler la série qui est stationnaire de la Partie 1.f  Considérons les modèles suivants :
+(1):   
+(2):   
+(3):   
+(4):   
+2.a) Estimez les 4 modèles par maximum de vraisemblance, présentez les résultats de l'estimation et vérifiez si les conditions de stationnarité sont satisfaites.
+
+pbar = 8
+
+%% ESTIMATION OF THE AR(1) WITH ML (USING ECONOMETRICS TOOLBOX)
+
+Mdl1 = arima(1, 0, 0);
+AR1 = estimate(Mdl1, d_HP);
+delta_ml1 = AR1.Constant;
+phi_ml1 = AR1.AR;
+sigma_ml1 = sqrt(AR1.Variance);
+
+Mdl2 = arima(2, 0, 0);
+AR2 = estimate(Mdl2, d_HP);
+delta_ml2 = AR2.Constant;
+phi_ml2 = AR2.AR;  % Renverra un vecteur avec [phi1, phi2]
+sigma_ml2 = sqrt(AR2.Variance);
+
+Mdl3 = arima(3, 0, 0);
+AR3 = estimate(Mdl3, d_HP);
+delta_ml3 = AR3.Constant;
+phi_ml3 = AR3.AR;  % Renverra un vecteur avec [phi1, phi2, phi3]
+sigma_ml3 = sqrt(AR3.Variance);
+
+Mdl4 = arima('Constant', NaN, 'ARLags', [1 3]);  % On spécifie seulement les lags 1 et 3
+AR4 = estimate(Mdl4, d_HP);
+delta_ml4 = AR4.Constant;
+gamma_ml4 = AR4.AR(1);  % Coefficient de y_{t-1}
+eta_ml4 = AR4.AR(2);    % Coefficient de y_{t-3}
+sigma_ml4 = sqrt(AR4.Variance);
+
+phi_AR1 = cell2mat(AR1.AR);
+phi_AR2 = cell2mat(AR2.AR);
+phi_AR3 = cell2mat(AR3.AR);
+phi_AR13 = cell2mat(AR4.AR);
+
+phi_coeffs_AR1 = [1, -phi_AR1];
+roots_AR1 = roots(phi_coeffs_AR1);
+is_stationary_AR1 = all(abs(roots_AR1) > 1);
+disp(['Le modèle AR(1) est stationnaire : ', num2str(is_stationary_AR1)]);
+
+phi_coeffs_AR2 = [1, -phi_AR2(1), -phi_AR2(2)];
+roots_AR2 = roots(phi_coeffs_AR2);
+is_stationary_AR2 = all(abs(roots_AR2) > 1);
+disp(['Le modèle AR(2) est stationnaire : ', num2str(is_stationary_AR2)]);
+
+phi_coeffs_AR3 = [1, -phi_AR3(1), -phi_AR3(2), -phi_AR3(3)];
+roots_AR3 = roots(phi_coeffs_AR3);
+is_stationary_AR3 = all(abs(roots_AR3) > 1);
+disp(['Le modèle AR(3) est stationnaire : ', num2str(is_stationary_AR3)]);
+
+
+Interprétation 
+
+2.b) Effectuez 2 tests de rapport de vraisemblance pour justifier la sélection de modèles. Avec le prémier test, sélectionnez un modèle entre les modèles (1) et (2). Avec le deuxieme test , sélectionnez entre modèle entre les modèles (3) et (4). Enfin, sélectionnez un modèle entre les deux qui restent avec le critère BIC.
+
+Interprétation :
+
+
+
+
