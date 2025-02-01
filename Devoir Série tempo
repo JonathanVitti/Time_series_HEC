@@ -1,4 +1,4 @@
-Partie 1. Analyse préliminaire (25 points)
+PPartie 1. Analyse préliminaire (25 points)
 
 Définissons la série   pour le reste de ce travail, où   est l'indice réel des prix d'habitations au Canada.
 1.a) Chargez les données et ne gardez que les observations jusqu'à décembre 2019. Tracez la série brute  avec des étiquettes sur chaque axe et un titre  'log(HP_t)'. La dimension temporelle doit apparaître sur l'axe des abscisses. Qu est-ce que log(HP_t) - log(HP_{t-1}) measurable sur l'axis vertical represent?
@@ -6,7 +6,7 @@ clc
 close all
 clear all
 
-%cd('C:\Users\fi95063\Desktop')
+cd('C:\Users\fi95063\Desktop')
 
 data = readtable('QCAR628BIS.csv');
 
@@ -165,8 +165,129 @@ Interprétation
 
 2.b) Effectuez 2 tests de rapport de vraisemblance pour justifier la sélection de modèles. Avec le prémier test, sélectionnez un modèle entre les modèles (1) et (2). Avec le deuxieme test , sélectionnez entre modèle entre les modèles (3) et (4). Enfin, sélectionnez un modèle entre les deux qui restent avec le critère BIC.
 
+addpath('C:\Users\fi95063\Desktop');
+
+LR = zeros(pbar,4);
+
+T = length(d_HP);   % Nombre total d'observations dans les rendements différenciés
+nobs = T - pbar;    % Nombre d'observations après avoir pris en compte les décalages
+
+pbar = 8;
+
+for p = 1:pbar
+
+p0 = p - 1;  % Ordre du modèle restreint
+p1 = p;      % Ordre du modèle non restreint
+
+[Y0, X0] = VARmakexy(d_HP(pbar-(p0-1):T), p0, 1);  % Préparation des données pour le modèle AR(p-1)
+beta0 = X0 \ Y0;                                  % Estimation des coefficients (Moindres Carrés Ordinaires)
+U0 = Y0 - X0 * beta0;                             % Résidus du modèle restreint
+varU0 = U0' * U0 / (nobs - (p0 + 1));             % Variance des résidus (corrigée pour les degrés de liberté)
+varU0ML = U0' * U0 / nobs;                         % Variance des résidus (vraisemblance maximale)
+
+ [Y1, X1] = VARmakexy(d_HP(pbar-(p0):T),p1,1);
+    
+  beta1 = X1\Y1;
+  U1   = Y1-X1*beta1;
+  varU1 = U1'*U1/(nobs -(p1+1));
+  varU1ML= U1'*U1/nobs;
+    
+  R = zeros(1,p1+1);
+  R(p1+1) = 1;
+
+  LR(p,1) = p;
+    LR(p,2) = nobs*(log(varU0ML)-log(varU1ML));
+    LR(p,3) = chi2inv(0.95,1);
+    LR(p,4) = 1- chi2cdf(LR(p,2),1);
+
+end
+
+disp('Likelihood Ratio Test')
+LR
+
+addpath('C:\Users\fi95063\Desktop');
+
+LR = zeros(pbar,4);
+BIC= zeros(pbar,2);
+
+T = length(d_HP);   % Nombre total d'observations dans les rendements différenciés
+nobs = T - pbar;    % Nombre d'observations après avoir pris en compte les décalages
+
+pbar = 8;
+
+for p = 1:pbar
+
+    p0 = p - 1;  % Ordre du modèle restreint
+    p1 = p;      % Ordre du modèle non restreint
+
+    [Y0, X0] = VARmakexy(d_HP(pbar-(p0-1):T), p0, 1);  % Préparation des données pour AR(p-1)
+    beta0 = X0 \ Y0;  % Estimation des coefficients (Moindres Carrés Ordinaires)
+    U0 = Y0 - X0 * beta0;  % Résidus du modèle restreint
+    varU0ML = U0' * U0 / nobs;  % Variance des résidus (vraisemblance maximale)
+
+    [Y1, X1] = VARmakexy(d_HP(pbar-(p0):T), p1, 1);  % Préparation des données pour AR(p)
+    beta1 = X1 \ Y1;  % Estimation des coefficients (Moindres Carrés Ordinaires)
+    U1 = Y1 - X1 * beta1;  % Résidus du modèle non restreint
+    varU1ML = U1' * U1 / nobs;  % Variance des résidus (vraisemblance maximale)
+
+    % Test de rapport de vraisemblance
+    LR(p,1) = p;  % Stocke l'ordre du modèle non restreint
+    LR(p,2) = nobs * (log(varU0ML) - log(varU1ML));  % Statistique LR
+    LR(p,3) = chi2inv(0.95,1);  % Valeur critique du chi² à 95%
+    LR(p,4) = 1 - chi2cdf(LR(p,2),1);  % p-value du test
+
+     BIC(p,1) = p;
+    BIC(p,2) = (nobs - pbar) * log(varU1ML) + log(nobs) * (p + 1);
+
+end
+
+disp('Likelihood Ratio Test')
+LR
+
+disp('BIC: col#1 = # of lags,col#2 = BIC')
+BIC
+
+
+
+Interprétation :
+2.c) Évaluez l'hypothèse du bruit blanc pour le résidus du modèle choisi. Que pouvons-nous conclure ?
+LB = zeros(18,3);
+i = 1;
+for p = [1,2,3]
+    mdl = arima(p,0,0); %AR(p)
+    ARP = estimate(mdl,HP_t(pbar+1:T),'display','off');
+    [u_HP_t, var] = infer(ARP, HP_t(pbar+1:T)); %extract residuals
+    [h1,pValue1,stat1] = lbqtest(u_HP_t,'lags',1:18);
+    LB(1:18,i) = pValue1;
+    i = i + 1;
+end
+
+LB
 Interprétation :
 
+Partie 3. Réponse dynamique et prévision (30 points)
 
+3.a) Pour le modèle choisi,  évaluez la réponse dynamique pour un horizon de 10 périodes suite à un choc negatif de taille  survenant à la première période de l'horizon. Tracez la fonction de réponse dynamique et commentez. 
+% 3 a)
+sigma = 1.15; % La grandeur du choc
 
+% Avec impulse,
 
+psi2 = sigma*(impulse(AR4,10));
+
+clf;
+plot(psi2)
+title('Réponse dynamique du modèle 1 sur 10 périodes') 
+set(gca,'FontSize',10)
+Interprétation :
+
+3.b) Prévision : Divisez l'échantillon en un échantillon d'entraînement (training sample) et un échantillon de validation (holdout sample). L'échantillon de validation devrait être composé des 34 dernières observations. 
+Ré-estimez le modèle choisi en utilisant uniquement l'échantillon d'entraînement. 
+Calculez les prévisions à trois pas en avant  pour l'échantillon de validation.
+Tracez ces prévisions et la vrai série  sur le même graphique pour la période couverte par l'échantillon de validation.
+.
+Interprétation :
+
+3.c) Calculez deux critères de performance de la prévision : l'erreur moyenne et l'erreur absolue moyenne associées avec la prévision à l'étape 3.b). Lequel entre les deux critères est plus grand et pourquoi?
+
+Interprétation :
